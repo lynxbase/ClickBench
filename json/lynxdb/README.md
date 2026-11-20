@@ -27,10 +27,14 @@ the rows:
 
 ## Load
 
-As for VictoriaLogs, up to 8 files are loaded at once, each with one request to
-`/api/v1/ingest`, and a failed request fails the load. `load.log` has the response of
-every file. The load ends with a request for the stats, which writes the buffered
-events to disk, and checks that the index holds every accepted event.
+Up to 16 files are loaded at once, each with one request to `/api/v1/ingest` with the
+file decompressed by `gzip -dc`, and a failed request fails the load. VictoriaLogs loads
+8 at once. For LynxDB, on m6i.8xlarge, 16 loaded 100m in 39.4 s against 48.9 s with 8,
+and 32 took 38.4 s; sending the `.json.gz` files as they are with
+`Content-Encoding: gzip` was as fast at 16 and 32 and spent 40% more CPU of the server.
+`load.log` has the response of every file. The load ends with a request for the stats,
+which writes the buffered events to disk, and checks that the index holds every
+accepted event.
 
 The lines that are not JSON objects (a few documents longer than 64 KiB are split into
 two lines in the dataset) are kept as events with only `_raw` and the time of arrival.
