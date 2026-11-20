@@ -29,26 +29,33 @@ the rows:
 
 Up to 16 files are loaded at once, each with one request to `/api/v1/ingest` with the
 file decompressed by `gzip -dc`, and a failed request fails the load. VictoriaLogs loads
-8 at once. For LynxDB, on m6i.8xlarge, 16 loaded 100m in 39.4 s against 48.9 s with 8,
-and 32 took 38.4 s; sending the `.json.gz` files as they are with
+8 at once. For LynxDB (commit b47cac79, m6i.8xlarge), 16 loaded 100m in 39.4 s against
+48.9 s with 8, and 32 took 38.4 s; sending the `.json.gz` files as they are with
 `Content-Encoding: gzip` was as fast at 16 and 32 and spent 40% more CPU of the server.
-`load.log` has the response of every file. The load ends with a request for the stats,
-which writes the buffered events to disk, and checks that the index holds every
-accepted event.
+`load.log` has the response of every file.
+
+After the files, a request for the stats writes the buffered events to disk, and the load
+checks that the index holds every accepted event. Then it merges the index
+(`POST /api/v1/indexes/bluesky/compact`, which returns when the merge is done), as the
+loads of Elasticsearch and OpenSearch end with a force merge: the merge is a part of the
+load time, and the queries run with no merge in flight. With a build that has no compact
+request, the load waits until the part count and the size of the data directory have not
+changed for `LYNXDB_MERGE_QUIET` seconds (default 10). `LYNXDB_LOAD_WAIT_MERGES=no` leaves
+the merges to the background, as for VictoriaLogs and ClickHouse, for comparison.
 
 The lines that are not JSON objects (a few documents longer than 64 KiB are split into
-two lines in the dataset) are kept as events with only `_raw` and the time of arrival.
-ClickHouse and VictoriaLogs reject them, so LynxDB counts 10,000,000 documents on 10m
-where they count 9,999,994, and 100,000,000 on 100m where they count 99,999,968. In Q1
-the row of the events without `commit.collection` is larger by the same number.
+two lines in the dataset: 6 lines in 10m, 32 in 100m) are kept as events with only `_raw`
+and the time of arrival. ClickHouse and VictoriaLogs reject them, so LynxDB counts
+10,000,000 documents on 10m where they count 9,999,994, and 100,000,000 on 100m where they
+count 99,999,968. In Q1 the row of the events without `commit.collection` is larger by
+the same number; the other answers are the same as ClickHouse's.
 
-The load ends by merging the index (`POST /api/v1/indexes/bluesky/compact`, which
-returns when the merge is done), as the loads of Elasticsearch and OpenSearch end with a
-force merge, so the merge is a part of the load time and the queries run with no merge
-in flight. With a build that has no compact request, the load waits until the part count
-and the size of the data directory have not changed for `LYNXDB_MERGE_QUIET` seconds
-(default 10). `LYNXDB_LOAD_WAIT_MERGES=no` leaves the merges to the background, as for
-VictoriaLogs and ClickHouse, for comparison.
+## Start
+
+LynxDB reads its own executable into the page cache before it listens, so `check` passes
+only after that, and the first query after a restart does not fault in the code of the
+server from the volume. It reads no data then. The ClickHouse entry loads its primary
+keys at startup for the same reason.
 
 ## Queries
 
