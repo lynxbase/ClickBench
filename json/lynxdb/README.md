@@ -8,22 +8,25 @@ commit that was built is the version of the result.
 
 ## Settings
 
-`lynxdb.yaml` holds four settings that the dataset or the method need, and the order of
-the rows:
+`lynxdb.yaml` holds the three settings that the run needs:
 
 - `retention: 0s` keeps all events; the default keeps seven days, and the events are from
   2024.
-- `storage.time_fields: [time_us]` takes the event time from `time_us`, as VictoriaLogs
-  is told with `_time_field=time_us`; none of the default time fields is in the data.
 - `ingest.max_body_size: 1gb` lets one request carry one file (about 480 MB), as for
   VictoriaLogs; the default is 100 MB.
 - `query.sync_timeout: 1h`: by default a query that runs longer than 30 seconds is
   answered with `202` and a job handle. VictoriaLogs gets `-search.maxQueryDuration=5m`
   for the same reason.
-- `storage.sort_key: [kind, commit.operation, commit.collection, did]` orders the rows
-  of every part by these fields, and by time within them. It is the physical design of
-  this entry, as `ORDER BY` is for ClickHouse (the same fields, then the time) and
-  `_stream_fields` for VictoriaLogs.
+
+The physical design of the index is declared when `load` creates it with
+`PUT /api/v1/indexes/bluesky` and the body in `index.json`, as the load of ClickHouse
+creates its table with `ORDER BY`:
+
+- `sort_key: [kind, commit.operation, commit.collection, did]` orders the rows of every
+  part by these fields, and by time within them: ClickHouse's `ORDER BY` has the same
+  fields, then the time, and VictoriaLogs gets the first three as `_stream_fields`.
+- `time_fields: [time_us]` takes the event time from `time_us`, as VictoriaLogs is told
+  with `_time_field=time_us`.
 
 ## Load
 
@@ -38,9 +41,7 @@ After the files, a request for the stats writes the buffered events to disk, and
 checks that the index holds every accepted event. Then it merges the index
 (`POST /api/v1/indexes/bluesky/compact`, which returns when the merge is done), as the
 loads of Elasticsearch and OpenSearch end with a force merge: the merge is a part of the
-load time, and the queries run with no merge in flight. With a build that has no compact
-request, the load waits until the part count and the size of the data directory have not
-changed for `LYNXDB_MERGE_QUIET` seconds (default 10). `LYNXDB_LOAD_WAIT_MERGES=no` leaves
+load time, and the queries run with no merge in flight. `LYNXDB_LOAD_WAIT_MERGES=no` leaves
 the merges to the background, as for VictoriaLogs and ClickHouse, for comparison.
 
 The lines that are not JSON objects (a few documents longer than 64 KiB are split into

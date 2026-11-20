@@ -11,6 +11,16 @@ for i in $(seq 1 300); do
     sleep 0.2
 done
 
+# The physical design of the index, declared when it is created, as the load
+# of ClickHouse creates its table with ORDER BY.
+response=$(curl -sS -w '\n%{http_code}' -X PUT -H 'Content-Type: application/json' \
+    --data-binary @index.json 'http://127.0.0.1:3100/api/v1/indexes/bluesky')
+code=$(tail -n1 <<< "${response}")
+if [ "${code}" != 200 ] && [ "${code}" != 201 ]; then
+    echo "load: creating the index failed with HTTP ${code}: $(sed '$d' <<< "${response}")" >&2
+    exit 1
+fi
+
 shopt -s nullglob
 files=("${BENCH_DATA_DIR}"/file_*.json.gz)
 if [ "${#files[@]}" -lt "${BENCH_FILES}" ]; then
@@ -47,29 +57,8 @@ echo "load: ${accepted} events from $(wc -l < load.log | tr -d ' ') files, $(jq 
 [ "${LYNXDB_LOAD_WAIT_MERGES:-yes}" = "yes" ] || exit 0
 response=$(curl -sS -w '\n%{http_code}' -X POST 'http://127.0.0.1:3100/api/v1/indexes/bluesky/compact')
 code=$(tail -n1 <<< "${response}")
-case "${code}" in
-    200)
-        echo "load: merged: $(sed '$d' <<< "${response}")"
-        ;;
-    404|405)
-        # A build without the compact request: wait until the part count and
-        # the size of the data directory have not changed for
-        # LYNXDB_MERGE_QUIET seconds.
-        last="" unchanged=0
-        while [ "${unchanged}" -lt "${LYNXDB_MERGE_QUIET:-10}" ]; do
-            sleep 1
-            state="$(curl -sS --fail 'http://127.0.0.1:3100/api/v1/stats' | jq '.data.part_count') parts, $(du -sk lynxdb-data | cut -f1) KiB"
-            if [ "${state}" = "${last}" ]; then
-                unchanged=$((unchanged + 1))
-            else
-                unchanged=0
-                last="${state}"
-            fi
-        done
-        echo "load: no compact request in this build; the merges stopped at ${last}"
-        ;;
-    *)
-        echo "load: compact failed with HTTP ${code}: $(sed '$d' <<< "${response}")" >&2
-        exit 1
-        ;;
-esac
+if [ "${code}" != 200 ]; then
+    echo "load: compact failed with HTTP ${code}: $(sed '$d' <<< "${response}")" >&2
+    exit 1
+fi
+echo "load: merged: $(sed '$d' <<< "${response}")"

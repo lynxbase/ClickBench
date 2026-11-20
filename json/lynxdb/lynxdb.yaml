@@ -1,10 +1,6 @@
-# The settings the dataset and the method need, and the order of the rows;
-# see README.md.
+# The settings the run needs; the design of the index is in index.json, see
+# README.md.
 retention: 0s
-
-storage:
-  time_fields: [time_us]
-  sort_key: [kind, commit.operation, commit.collection, did]
 
 ingest:
   max_body_size: 1gb

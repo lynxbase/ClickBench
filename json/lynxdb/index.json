@@ -1,0 +1,4 @@
+{
+  "sort_key": ["kind", "commit.operation", "commit.collection", "did"],
+  "time_fields": ["time_us"]
+}
