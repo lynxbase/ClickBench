@@ -5,9 +5,9 @@
 [ -s server.pid ] || exit 0
 pid=$(cat server.pid)
 if kill "${pid}" 2>/dev/null; then
-    for _ in $(seq 1 900); do
+    for _ in $(seq 1 9000); do
         kill -0 "${pid}" 2>/dev/null || break
-        sleep 1
+        sleep 0.1
     done
     if kill -0 "${pid}" 2>/dev/null; then
         echo "stop: LynxDB did not exit within 900 s, killing it" >&2
