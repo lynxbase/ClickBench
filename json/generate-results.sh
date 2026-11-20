@@ -23,7 +23,7 @@ complexity() {
     local files
     if [ -z "$(git ls-files -- "$1/install")" ]; then echo null; return; fi
     mapfile -d '' files < <(git ls-files -z -- "$1/" \
-        | grep -zvE '(^[^/]+/results/|\.(json|md|sql|txt|lock|pyc|js|json5|logsql)$|\.sql\.|(^|/)\.(git|docker)ignore$)' \
+        | grep -zvE '(^[^/]+/results/|\.(json|md|sql|txt|lock|pyc|js|json5|logsql|ppl)$|\.sql\.|(^|/)\.(git|docker)ignore$)' \
         | sort -z \
         | xargs -0 --no-run-if-empty grep -Il --null '')
     if [ ${#files[@]} = 0 ]; then echo null; return; fi
