@@ -41,21 +41,35 @@ if [ "${events}" != "${accepted}" ]; then
 fi
 echo "load: ${accepted} events from $(wc -l < load.log | tr -d ' ') files, $(jq -s 'map(.failed) | add' load.log) lines failed"
 
-# Off by default, as for VictoriaLogs and ClickHouse, whose merges also go on
-# after the load. With LYNXDB_LOAD_WAIT_MERGES=yes the load ends when the part
-# count and the size of the data directory have not changed for
-# LYNXDB_MERGE_QUIET seconds: no request tells when the merges are over.
-if [ "${LYNXDB_LOAD_WAIT_MERGES:-no}" = "yes" ]; then
-    last="" unchanged=0
-    while [ "${unchanged}" -lt "${LYNXDB_MERGE_QUIET:-10}" ]; do
-        sleep 1
-        state="$(curl -sS --fail 'http://127.0.0.1:3100/api/v1/stats' | jq '.data.part_count') parts, $(du -sk lynxdb-data | cut -f1) KiB"
-        if [ "${state}" = "${last}" ]; then
-            unchanged=$((unchanged + 1))
-        else
-            unchanged=0
-            last="${state}"
-        fi
-    done
-    echo "load: merges are over: ${last}"
-fi
+# The load ends with the index merged, as the loads of Elasticsearch and
+# OpenSearch end with a force merge, so that the queries run with no merge in
+# flight. LYNXDB_LOAD_WAIT_MERGES=no leaves the merges to the background.
+[ "${LYNXDB_LOAD_WAIT_MERGES:-yes}" = "yes" ] || exit 0
+response=$(curl -sS -w '\n%{http_code}' -X POST 'http://127.0.0.1:3100/api/v1/indexes/bluesky/compact')
+code=$(tail -n1 <<< "${response}")
+case "${code}" in
+    200)
+        echo "load: merged: $(sed '$d' <<< "${response}")"
+        ;;
+    404|405)
+        # A build without the compact request: wait until the part count and
+        # the size of the data directory have not changed for
+        # LYNXDB_MERGE_QUIET seconds.
+        last="" unchanged=0
+        while [ "${unchanged}" -lt "${LYNXDB_MERGE_QUIET:-10}" ]; do
+            sleep 1
+            state="$(curl -sS --fail 'http://127.0.0.1:3100/api/v1/stats' | jq '.data.part_count') parts, $(du -sk lynxdb-data | cut -f1) KiB"
+            if [ "${state}" = "${last}" ]; then
+                unchanged=$((unchanged + 1))
+            else
+                unchanged=0
+                last="${state}"
+            fi
+        done
+        echo "load: no compact request in this build; the merges stopped at ${last}"
+        ;;
+    *)
+        echo "load: compact failed with HTTP ${code}: $(sed '$d' <<< "${response}")" >&2
+        exit 1
+        ;;
+esac

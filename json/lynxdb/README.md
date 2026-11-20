@@ -38,12 +38,13 @@ ClickHouse and VictoriaLogs reject them, so LynxDB counts 10,000,000 documents o
 where they count 9,999,994, and 100,000,000 on 100m where they count 99,999,968. In Q1
 the row of the events without `commit.collection` is larger by the same number.
 
-The load does not wait for the merges of the parts, as for VictoriaLogs and ClickHouse.
-On `stop`, LynxDB finishes the merges under way before it exits, and it starts the due
-merges again when it starts, so a part of the merging is done during the restarts before
-the cold runs. `LYNXDB_LOAD_WAIT_MERGES=yes` makes the load wait until the part count and
-the size of the data directory have not changed for `LYNXDB_MERGE_QUIET` seconds
-(default 10), for comparison.
+The load ends by merging the index (`POST /api/v1/indexes/bluesky/compact`, which
+returns when the merge is done), as the loads of Elasticsearch and OpenSearch end with a
+force merge, so the merge is a part of the load time and the queries run with no merge
+in flight. With a build that has no compact request, the load waits until the part count
+and the size of the data directory have not changed for `LYNXDB_MERGE_QUIET` seconds
+(default 10). `LYNXDB_LOAD_WAIT_MERGES=no` leaves the merges to the background, as for
+VictoriaLogs and ClickHouse, for comparison.
 
 ## Queries
 
