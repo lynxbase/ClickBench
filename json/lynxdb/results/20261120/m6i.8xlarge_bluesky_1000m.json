@@ -1,0 +1,24 @@
+{
+  "system": "LynxDB",
+  "proprietary": "no",
+  "retains_structure": "no",
+  "tags": [
+    "Go",
+    "column-oriented"
+  ],
+  "version": "ad9d7e3b94a5",
+  "os": "Ubuntu 24.04",
+  "date": "2026-11-20",
+  "machine": "m6i.8xlarge",
+  "dataset_size": 1000000000,
+  "num_loaded_documents": 1000000000,
+  "load_time": 824.199,
+  "total_size": 92733322991,
+  "result": [
+    [0.001766, 0.001411, 0.00121],
+    [0.049715, 0.048932, 0.048767],
+    [0.103277, 0.065215, 0.061742],
+    [0.008014, 0.00278, 0.003134],
+    [0.319787, 0.063005, 0.062992]
+  ]
+}
