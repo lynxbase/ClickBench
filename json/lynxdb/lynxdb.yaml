@@ -1,0 +1,9 @@
+# The settings the run needs; the design of the index is in index.json, see
+# README.md.
+retention: 0s
+
+ingest:
+  max_body_size: 1gb
+
+query:
+  sync_timeout: 1h

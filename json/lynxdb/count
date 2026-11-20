@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+curl -sS --fail -G 'http://127.0.0.1:3100/api/v1/query' \
+    --data-urlencode 'q=source=bluesky | stats count() as count' \
+    | jq -er '.data.rows[0][0]'

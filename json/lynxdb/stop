@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# On SIGTERM the server writes the events it buffered and waits for the merges
+# under way before it exits, which can take minutes after a large load.
+[ -s server.pid ] || exit 0
+pid=$(cat server.pid)
+if kill "${pid}" 2>/dev/null; then
+    for _ in $(seq 1 9000); do
+        kill -0 "${pid}" 2>/dev/null || break
+        sleep 0.1
+    done
+    if kill -0 "${pid}" 2>/dev/null; then
+        echo "stop: LynxDB did not exit within 900 s, killing it" >&2
+        kill -9 "${pid}" 2>/dev/null || true
+    fi
+fi
+rm -f server.pid
+exit 0

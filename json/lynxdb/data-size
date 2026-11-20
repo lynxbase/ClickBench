@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+# The files of the index on disk: its parts, with their token filters, and its
+# manifest. The size of the parts in the stats goes to stderr for comparison.
+curl -sS --fail 'http://127.0.0.1:3100/api/v1/stats' \
+    | jq -r '.data.indexes[] | select(.name == "bluesky") | "data-size: \(.bytes) bytes in \(.parts) parts in the stats"' >&2
+du -sb lynxdb-data/indexes/bluesky | cut -f1

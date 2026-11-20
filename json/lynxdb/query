@@ -1,0 +1,28 @@
+#!/bin/bash
+# Reads a PPL query from stdin, runs it with the HTTP API.
+# Stdout: the result (JSON). Stderr: the server's own time of the query as
+# "server_seconds: <s>", then the runtime in fractional seconds on the last
+# line: the wall-clock time of the HTTP request, as for VictoriaLogs.
+set -e
+
+query=$(cat)
+
+out=$(mktemp /var/tmp/lynxdb-query.XXXXXX)
+trap 'rm -f "${out}"' EXIT
+
+written=$(curl -sS -o "${out}" -w '%{http_code} %{time_total}' \
+    -G 'http://127.0.0.1:3100/api/v1/query' --data-urlencode "q=${query}")
+code=${written% *}
+time_s=${written#* }
+
+# A query that outlives query.sync_timeout is answered 202 with a job handle.
+if [ "${code}" != 200 ]; then
+    cat "${out}" >&2
+    echo >&2
+    echo "query: HTTP status ${code}" >&2
+    exit 1
+fi
+
+cat "${out}"
+echo "server_seconds: $(jq -r '.meta.took_ms / 1000' "${out}")" >&2
+echo "${time_s}" >&2
