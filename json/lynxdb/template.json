@@ -1,0 +1,9 @@
+{
+  "system": "LynxDB",
+  "proprietary": "no",
+  "retains_structure": "no",
+  "tags": [
+    "Go",
+    "column-oriented"
+  ]
+}

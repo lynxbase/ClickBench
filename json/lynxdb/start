@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+# Idempotent: do nothing if it is already running.
+if [ -s server.pid ] && kill -0 "$(cat server.pid)" 2>/dev/null; then
+    exit 0
+fi
+
+nohup ./lynxdb server --config lynxdb.yaml --addr 127.0.0.1:3100 --data-dir lynxdb-data >> server.log 2>&1 &
+echo $! > server.pid

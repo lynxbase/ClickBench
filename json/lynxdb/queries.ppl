@@ -1,0 +1,5 @@
+source=bluesky | stats count() as count by commit.collection | sort - count
+source=bluesky | where kind = 'commit' and commit.operation = 'create' | stats count() as count, distinct_count(did) as users by commit.collection | sort - count
+source=bluesky | where kind = 'commit' and commit.operation = 'create' and commit.collection in ('app.bsky.feed.post', 'app.bsky.feed.repost', 'app.bsky.feed.like') | eval hour_of_day = hour(_time) | stats count() as count by commit.collection, hour_of_day | sort hour_of_day, commit.collection
+source=bluesky | where kind = 'commit' and commit.operation = 'create' and commit.collection = 'app.bsky.feed.post' | stats min(_time) as first_post_ts by did | sort first_post_ts | head 3
+source=bluesky | where kind = 'commit' and commit.operation = 'create' and commit.collection = 'app.bsky.feed.post' | stats min(_time) as tmin, max(_time) as tmax by did | eval activity_span = timestampdiff(MILLISECOND, from_unixtime(0), tmax) - timestampdiff(MILLISECOND, from_unixtime(0), tmin) | fields did, activity_span | sort - activity_span | head 3

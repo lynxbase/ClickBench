@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+
+# The server opens its indexes before it listens.
+curl -sSf 'http://127.0.0.1:3100/health' >/dev/null

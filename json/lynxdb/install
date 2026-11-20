@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e -o pipefail
+
+# Builds ./lynxdb from LYNXDB_REPO at LYNXDB_REF (a branch, tag or commit),
+# once: delete ./lynxdb to build again. There are no release builds of every
+# commit, and the commit that was built is the version of the result.
+: "${LYNXDB_REPO:=https://github.com/lynxbase/lynxdb}"
+: "${LYNXDB_REF:=main}"
+: "${GO_VERSION:=1.27.4}"
+
+if [ -x ./lynxdb ] && [ -s lynxdb.version ]; then
+    exit 0
+fi
+
+# go.mod needs Go 1.26 or later; Ubuntu 24.04 packages 1.22.
+if ! go version 2>/dev/null | grep -qE 'go1\.(2[6-9]|[3-9][0-9])'; then
+    GO_ROOT="${HOME}/.local/go-${GO_VERSION}"
+    if [ ! -x "${GO_ROOT}/bin/go" ]; then
+        mkdir -p "${GO_ROOT}"
+        curl -fsSL --retry 10 --retry-delay 10 --retry-all-errors \
+            "https://go.dev/dl/go${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" \
+            | tar xz -C "${GO_ROOT}" --strip-components=1
+    fi
+    export PATH="${GO_ROOT}/bin:${PATH}"
+fi
+
+HERE="${PWD}"
+SRC=$(mktemp -d /var/tmp/lynxdb-src.XXXXXX)
+trap 'rm -rf "${SRC}"' EXIT
+
+git clone --quiet --filter=blob:none "${LYNXDB_REPO}" "${SRC}"
+git -C "${SRC}" checkout --quiet "${LYNXDB_REF}"
+COMMIT=$(git -C "${SRC}" rev-parse HEAD)
+
+# As the release builds, without cgo; the commit is stamped into the binary.
+(cd "${SRC}" && CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-X github.com/lynxbase/lynxdb/internal/buildinfo.Commit=${COMMIT}" \
+    -o "${HERE}/lynxdb" ./cmd/lynxdb)
+echo "${COMMIT:0:12}" > lynxdb.version

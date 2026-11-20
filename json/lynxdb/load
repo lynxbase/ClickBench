@@ -1,0 +1,61 @@
+#!/bin/bash
+set -e
+
+# Idempotent: start from an empty data directory.
+./stop
+rm -rf lynxdb-data
+./start
+for i in $(seq 1 300); do
+    ./check >/dev/null 2>&1 && break
+    [ "$i" -eq 300 ] && { echo "load: LynxDB did not start" >&2; exit 1; }
+    sleep 0.2
+done
+
+shopt -s nullglob
+files=("${BENCH_DATA_DIR}"/file_*.json.gz)
+if [ "${#files[@]}" -lt "${BENCH_FILES}" ]; then
+    echo "load: ${#files[@]} files in ${BENCH_DATA_DIR}, ${BENCH_FILES} needed" >&2
+    exit 1
+fi
+
+# As for VictoriaLogs: up to 8 files are loaded in parallel, each with one
+# request, and a failed request fails the load. Lines that are not JSON
+# objects (a few documents longer than 64 KiB are split into two lines in the
+# dataset) are kept as events with only _raw. load.log gets the response for
+# every file.
+URL='http://127.0.0.1:3100/api/v1/ingest?index=bluesky'
+printf '%s\n' "${files[@]:0:${BENCH_FILES}}" \
+    | xargs -P 8 -I '{}' bash -c 'set -o pipefail
+        response=$(gzip -dc "$1" | curl -sS --fail-with-body -T - -X POST "$2") \
+            || { echo "load: $1: ${response}" >&2; exit 1; }
+        jq -c --arg file "$1" ".data + {file: \$file}" <<< "${response}"' _ '{}' "${URL}" \
+    > load.log
+
+# A stats request writes the buffered events to disk first.
+events=$(curl -sS --fail 'http://127.0.0.1:3100/api/v1/stats' \
+    | jq -e '.data.indexes[] | select(.name == "bluesky") | .events')
+accepted=$(jq -s 'map(.accepted) | add' load.log)
+if [ "${events}" != "${accepted}" ]; then
+    echo "load: ${accepted} events accepted, but the index has ${events}" >&2
+    exit 1
+fi
+echo "load: ${accepted} events from $(wc -l < load.log | tr -d ' ') files, $(jq -s 'map(.failed) | add' load.log) lines failed"
+
+# Off by default, as for VictoriaLogs and ClickHouse, whose merges also go on
+# after the load. With LYNXDB_LOAD_WAIT_MERGES=yes the load ends when the part
+# count and the size of the data directory have not changed for
+# LYNXDB_MERGE_QUIET seconds: no request tells when the merges are over.
+if [ "${LYNXDB_LOAD_WAIT_MERGES:-no}" = "yes" ]; then
+    last="" unchanged=0
+    while [ "${unchanged}" -lt "${LYNXDB_MERGE_QUIET:-10}" ]; do
+        sleep 1
+        state="$(curl -sS --fail 'http://127.0.0.1:3100/api/v1/stats' | jq '.data.part_count') parts, $(du -sk lynxdb-data | cut -f1) KiB"
+        if [ "${state}" = "${last}" ]; then
+            unchanged=$((unchanged + 1))
+        else
+            unchanged=0
+            last="${state}"
+        fi
+    done
+    echo "load: merges are over: ${last}"
+fi
