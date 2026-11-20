@@ -47,15 +47,19 @@ After the files, a request for the stats writes the buffered events to disk, and
 checks that the index holds every accepted event. Then it merges the index
 (`POST /api/v1/indexes/bluesky/compact`, which returns when the merge is done), as the
 loads of Elasticsearch and OpenSearch end with a force merge: the merge is a part of the
-load time, and the queries run with no merge in flight. `LYNXDB_LOAD_WAIT_MERGES=no` leaves
-the merges to the background, as for VictoriaLogs and ClickHouse, for comparison.
+load time, and the queries run with no merge in flight. On 1000m (commit ad9d7e3b,
+m6i.8xlarge) the files took 394 s and the merge 430 s of the 824 s.
+`LYNXDB_LOAD_WAIT_MERGES=no` leaves the merges to the background, as for VictoriaLogs and
+ClickHouse, for comparison.
 
 The lines that are not JSON objects (a few documents longer than 64 KiB are split into
 two lines in the dataset: 6 lines in 10m, 32 in 100m) are kept as events with only `_raw`
 and the time of arrival. ClickHouse and VictoriaLogs reject them, so LynxDB counts
 10,000,000 documents on 10m where they count 9,999,994, and 100,000,000 on 100m where they
 count 99,999,968. In Q1 the row of the events without `commit.collection` is larger by
-the same number; the other answers are the same as ClickHouse's.
+the same number; the other answers are the same as ClickHouse's. On 1000m LynxDB counts
+1,000,000,000 events, one for each line of the 1000 files; ClickHouse loads 999,999,258
+documents and VictoriaLogs 999,999,241.
 
 ## Start
 
