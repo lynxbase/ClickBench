@@ -27,6 +27,12 @@ creates its table with `ORDER BY`:
   fields, then the time, and VictoriaLogs gets the first three as `_stream_fields`.
 - `time_fields: [time_us]` takes the event time from `time_us`, as VictoriaLogs is told
   with `_time_field=time_us`.
+- `partition: 366d`, the longest span the server takes, keeps the events in one
+  partition. ClickHouse's table in this benchmark has no `PARTITION BY`, so one partition
+  is the like-for-like design; LynxDB's default of daily partitions serves retention and
+  time-range pruning, which this benchmark does not exercise. With daily partitions the
+  same build (df41edc0, m6i.8xlarge) ran Q2 at 100m in 0.121 s hot and 0.238 s cold, and
+  with one partition in 0.007 s hot and 0.014 s cold.
 
 ## Load
 
