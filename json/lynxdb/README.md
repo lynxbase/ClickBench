@@ -52,21 +52,31 @@ m6i.8xlarge) the files took 394 s and the merge 430 s of the 824 s.
 `LYNXDB_LOAD_WAIT_MERGES=no` leaves the merges to the background, as for VictoriaLogs and
 ClickHouse, for comparison.
 
-The lines that are not JSON objects (a few documents longer than 64 KiB are split into
-two lines in the dataset: 6 lines in 10m, 32 in 100m) are kept as events with only `_raw`
-and the time of arrival. ClickHouse and VictoriaLogs reject them, so LynxDB counts
-10,000,000 documents on 10m where they count 9,999,994, and 100,000,000 on 100m where they
-count 99,999,968. In Q1 the row of the events without `commit.collection` is larger by
-the same number; the other answers are the same as ClickHouse's. On 1000m LynxDB counts
-1,000,000,000 events, one for each line of the 1000 files; ClickHouse loads 999,999,258
-documents and VictoriaLogs 999,999,241.
+The results were made with commit ad9d7e3b, which kept the lines that are not JSON objects
+(a few documents longer than 64 KiB are split into two lines in the dataset: 6 lines in
+10m, 32 in 100m) as events with only `_raw` and the time of arrival. ClickHouse and
+VictoriaLogs reject them, so LynxDB counts 10,000,000 documents on 10m where they count
+9,999,994, and 100,000,000 on 100m where they count 99,999,968. In Q1 the row of the
+events without `commit.collection` is larger by the same number; the other answers are the
+same as ClickHouse's. On 1000m LynxDB counts 1,000,000,000 events, one for each line of
+the 1000 files; ClickHouse loads 999,999,258 documents and VictoriaLogs 999,999,241.
+
+Since commit fa9cf5f1 (23 November 2026), `/api/v1/ingest` counts such a line as failed
+(`/api/v1/ingest/raw` takes log text), so the entry, which builds `main` by default, no
+longer loads them, and `load` reports them as failed lines. On 1000m, main (657aa79f,
+m6i.8xlarge) fails 759 lines and holds 999,999,241 events, as VictoriaLogs does: 755 lines
+that are not JSON objects and 4 objects in `file_0178.json.gz` whose `commit.record.langs`
+is nested 2,163 levels deep, beyond the parser's limit of 256.
 
 ## Start
 
-LynxDB reads its own executable into the page cache before it listens, so `check` passes
-only after that, and the first query after a restart does not fault in the code of the
-server from the volume. It reads no data then. The ClickHouse entry loads its primary
-keys at startup for the same reason.
+LynxDB reads its own executable into the page cache before it listens (a build of main is
+about 34 MB), so `check` passes only after that, and the first query after a restart does
+not fault in the code of the server from the volume. Opening the index also reads the
+footer of every part: the index of its blocks, their first sort keys, key and time
+records and the counts of small string fields, but no column data. On 1000m (main
+657aa79f, m6i.8xlarge) the start reads 151 MiB from the volume and takes 1.4 s. The
+ClickHouse entry loads its primary keys at startup for the same reason.
 
 ## Queries
 

@@ -30,9 +30,9 @@ fi
 
 # Up to 16 files are loaded in parallel, each with one request, and a failed
 # request fails the load: 16 loaded 100m about a fifth faster than 8, and 32
-# no faster (see README.md). Lines that are not JSON objects (a few documents
-# longer than 64 KiB are split into two lines in the dataset) are kept as
-# events with only _raw. load.log gets the response for every file.
+# no faster (see README.md). /api/v1/ingest counts a line that is not a JSON
+# object as failed (a few documents longer than 64 KiB are split into two lines
+# in the dataset; see README.md). load.log gets the response for every file.
 URL='http://127.0.0.1:3100/api/v1/ingest?index=bluesky'
 printf '%s\n' "${files[@]:0:${BENCH_FILES}}" \
     | xargs -P 16 -I '{}' bash -c 'set -o pipefail
